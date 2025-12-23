@@ -1,0 +1,80 @@
+name: Compare files with vars and secrets
+
+on:
+  workflow_dispatch:
+
+jobs:
+  compare-variable:
+    name: Compare file with repository variable
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compare file content with repository variable
+        run: |
+          FILE_PATH="config/var-value.txt"
+          echo "Reading file: $FILE_PATH"
+
+          # קורא את תוכן הקובץ ומסיר ירידת שורה בסוף אם יש
+          FILE_CONTENT=$(tr -d '\n' < "$FILE_PATH")
+
+          # לוקח את ערך משתנה הרפו
+          EXPECTED_VALUE="${{ vars.FILE_EXPECTED_VALUE }}"
+
+          if [ "$FILE_CONTENT" != "$EXPECTED_VALUE" ]; then
+            echo "❌ File content does NOT match repository variable."
+            echo "File content: $FILE_CONTENT"
+            echo "Expected (from variable): $EXPECTED_VALUE"
+            exit 1
+          fi
+
+          echo "✅ File content matches the repository variable."
+
+  compare-secret:
+    name: Compare file with secret
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compare file content with secret
+        run: |
+          FILE_PATH="config/secret-value.txt"
+          echo "Reading file: $FILE_PATH"
+
+          FILE_CONTENT=$(tr -d '\n' < "$FILE_PATH")
+
+          # שימי לב: לא מדפיסים את הסוד!
+          if [ "$FILE_CONTENT" != "${{ secrets.FILE_SECRET_VALUE }}" ]; then
+            echo "❌ File content does NOT match the configured secret."
+            exit 1
+          fi
+
+          echo "✅ File content matches the secret (value not printed)."
+
+  confirm-success:
+    name: Confirm success if previous jobs passed
+    runs-on: ubuntu-latest
+    needs:
+      - compare-variable
+      - compare-secret
+    # מוודאים שרץ רק אם שני הג׳ובים הקודמים הצליחו
+    if: ${{ needs.compare-variable.result == 'success' && needs.compare-secret.result == 'success' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Print file & variable values (but not secret)
+        run: |
+          FILE_PATH="config/var-value.txt"
+          FILE_CONTENT=$(tr -d '\n' < "$FILE_PATH")
+
+          echo "✅ All checks passed."
+          echo "File path: $FILE_PATH"
+          echo "File content: $FILE_CONTENT"
+          echo "Repository variable value: ${{ vars.FILE_EXPECTED_VALUE }}"
+          echo "Secret comparison also succeeded (secret value is NOT printed)."
